@@ -204,19 +204,19 @@ def get_encoder(config_encoder, gpu_type):
         return gpu_encoders[gpu_type][config_encoder]
     return config_encoder
 
-def handle_handbrake_output(process):
+def handle_handbrake_output(process, current_file, total_files, input_file):
     progress_pattern = re.compile(r'Encoding: task \d+ of \d+, (\d+\.\d+) %.*?(\d+\.\d+) fps, avg (\d+\.\d+) fps, ETA (\d+h\d+m\d+s)')
     for line in process.stdout:
         match = progress_pattern.search(line)
         if match:
             progress, current_fps, avg_fps, eta = match.groups()
-            sys.stdout.write(f"\rProgress: {progress}% | FPS: {current_fps} | ETA: {eta}")
+            sys.stdout.write(f"\r[{current_file}/{total_files}] {os.path.basename(input_file)} - Progress: {progress}% | FPS: {current_fps} | ETA: {eta}")
             sys.stdout.flush()
         logger.debug(line.strip())
     sys.stdout.write("\n")
     sys.stdout.flush()
 
-def transcode_video(input_file, output_file, config):
+def transcode_video(input_file, output_file, config, current_file, total_files):
     logger.debug(f"Starting transcoding of {input_file}")
     if not check_handbrake_installed():
         logger.error("HandBrakeCLI is not installed. Please install it and try again.")
@@ -266,7 +266,7 @@ def transcode_video(input_file, output_file, config):
     try:
         logger.debug(f"Running command: {' '.join(command)}")
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
-        handle_handbrake_output(process)
+        handle_handbrake_output(process, current_file, total_files, input_file)
         process.wait()
         if process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, command)
@@ -282,6 +282,7 @@ def transcode_video(input_file, output_file, config):
 
 def process_directory(config):
     logger.debug("Processing directory")
+    
     input_dir = os.path.expanduser(config['input_directory'])
     output_dir = os.path.expanduser(config['output_directory'])
     extensions = config['file_extensions']
@@ -290,31 +291,40 @@ def process_directory(config):
     logger.debug(f"Output directory: {output_dir}")
     logger.debug(f"File extensions to process: {extensions}")
 
-    # Create input directory if it doesn't exist
-    if not os.path.exists(input_dir):
-        os.makedirs(input_dir)
-        logger.info(f"Created input directory: {input_dir}")
+    # Create input and output directories if they don't exist
+    for dir_path in [input_dir, output_dir]:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+            logger.info(f"Created directory: {dir_path}")
 
-    # Create output directory if it doesn't exist
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        logger.info(f"Created output directory: {output_dir}")
+    # Get total number of files to process
+    total_files = sum(len(files) for _, _, files in os.walk(input_dir) 
+                      if any(f.lower().endswith(ext) for f in files for ext in extensions))
+    
+    current_file = 0
 
-    files_in_dir = os.listdir(input_dir)
-    logger.debug(f"Files in input directory: {files_in_dir}")
+    # Walk through all subdirectories
+    for root, dirs, files in os.walk(input_dir):
+        for file in files:
+            if any(file.lower().endswith(ext) for ext in extensions):
+                current_file += 1
+                input_file = os.path.join(root, file)
+                
+                # Create relative path
+                rel_path = os.path.relpath(root, input_dir)
+                
+                # Create corresponding output directory
+                output_subdir = os.path.join(output_dir, rel_path)
+                if not os.path.exists(output_subdir):
+                    os.makedirs(output_subdir)
+                
+                # Create output file path with the same name as input
+                output_file = os.path.join(output_subdir, file)
+                
+                # Call transcode function
+                transcode_video(input_file, output_file, config, current_file, total_files)
 
-    files_to_process = [f for f in files_in_dir if any(f.endswith(ext.lower()) or f.endswith(ext.upper()) for ext in extensions)]
-    logger.info(f"Found {len(files_to_process)} files to process")
-
-    if not files_to_process:
-        logger.warning("No files found matching the specified extensions.")
-        return
-
-    for filename in files_to_process:
-        input_path = os.path.join(input_dir, filename)
-        output_path = os.path.join(output_dir, f"transcoded_{filename}")
-        logger.info(f"Transcoding: {filename}")
-        transcode_video(input_path, output_path, config)
+    logger.info("Finished processing all directories and files")
 
 if __name__ == "__main__":
     logger = setup_logging()
