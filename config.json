@@ -1,0 +1,8 @@
+{
+    "input_directory": "~/media/transcode_input",
+    "output_directory": "~/media/transcode_output",
+    "file_extensions": [".mp4", ".avi", ".mkv"],
+    "quality": 22,
+    "audio_bitrate": 320,
+    "video_codec": "x264"
+}
