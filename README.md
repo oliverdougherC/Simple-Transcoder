@@ -14,17 +14,17 @@ Simple-Transcoder is a simple and effecient way to transcode video files. It use
 <!-- PREREQUISITES -->
 ## Prerequisites
 
-1. Install HandbrakeCLI
-```sh
-sudo apt install handbrake-cli
-```
-2. Install Python
+1. Install Python
 ```sh
 sudo apt install python3
 ```
-3. Install ffmpeg
+2. Install ffmpeg
 ```sh
 sudo apt install ffmpeg
+```
+3. Add ffmpeg to your PATH, follow this guide for windows
+```sh
+https://phoenixnap.com/kb/ffmpeg-windows
 ```
 
 <!-- INSTALLATION -->
